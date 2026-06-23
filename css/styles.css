@@ -81,7 +81,7 @@ html,body{
 }
 .hero-bg{
   position:absolute;inset:0;z-index:0;
-  background:url("Assets/aci-4.JPEG") center 35%/cover no-repeat;
+  background:url("Assets/PETRA_BUILDING.png") center 35%/cover no-repeat;
   animation:kenburns 26s ease-in-out infinite alternate;
 }
 .hero-overlay{
@@ -175,7 +175,7 @@ html,body{
 }
 .landing-cta .lc-bg{
   position:absolute;inset:0;z-index:0;opacity:.22;
-  background:url("Assets/aero-2.jpg") center 40%/cover no-repeat;
+  background:url("Assets/PETRA_Students.jpg") center 40%/cover no-repeat;
 }
 .landing-cta::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,32,90,.9),rgba(0,20,55,.95));}
 .landing-cta > *{position:relative;z-index:2;}
@@ -363,7 +363,7 @@ ul.tight li::before{content:"";position:absolute;left:0;top:7px;width:5px;height
 /* ---- COVER ---- */
 .cover{padding:0;display:flex;flex-direction:column;}
 .cover-top{position:relative;flex:0 0 47%;background:var(--petra-blue);overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:52px 64px;}
-.cover-photo{position:absolute;inset:0;background:url("Assets/aci-4.JPEG") center 30%/cover no-repeat;opacity:.14;}
+.cover-photo{position:absolute;inset:0;background:url("Assets/PETRA_BUILDING.png") center 30%/cover no-repeat;opacity:.14;}
 /* decorative diagonal accents kept in the top-right corner, clear of the text */
 .cover-accent{position:absolute;top:-58px;right:-80px;width:340px;height:118px;background:var(--guiding-gradient);transform:rotate(-30deg);opacity:.9;border-radius:8px;}
 .cover-accent.b{top:-22px;right:-118px;width:300px;height:22px;opacity:.5;}
