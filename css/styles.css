@@ -52,6 +52,9 @@ html,body{
 .btn-lang:hover{background:var(--petra-blue);color:var(--white);}
 .btn-print{background:var(--petra-blue);color:var(--white);border:1.5px solid var(--petra-blue);}
 .btn-print:hover{background:var(--petra-blue-dk);transform:translateY(-1px);}
+.btn-ppt{background:var(--danamon-green);color:var(--white);border:1.5px solid var(--danamon-green);}
+.btn-ppt:hover{filter:brightness(.92);transform:translateY(-1px);}
+.btn-ppt[disabled]{opacity:.65;cursor:progress;}
 
 /* =========================================================
    LOGOS (inline SVG lockups)
