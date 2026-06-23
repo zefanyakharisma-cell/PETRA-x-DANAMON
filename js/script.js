@@ -55,36 +55,37 @@
     });
   }
 
-  /* ---------- Export to PowerPoint (1 slide per section/page) ---------- */
-  // Each ".doc .page" (A4) becomes one slide. We rasterise each page with
-  // html2canvas and place it full-bleed on an A4-portrait slide via PptxGenJS,
-  // preserving the exact design and the currently selected language.
-  var CDN = {
-    html2canvas: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
-    pptxgen: "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"
+  /* =========================================================
+     Export to PowerPoint — native 16:9 presentation
+     Each ".doc .page" section becomes one widescreen slide, rebuilt
+     with native PptxGenJS text/shapes/tables/images (fully editable),
+     reading content live from the DOM so it follows the language toggle.
+     ========================================================= */
+  var PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
+
+  // Brand palette (from CSS :root), PptxGenJS hex without '#'
+  var C = {
+    blue: "003087", blueDk: "00205a", green: "006633",
+    red: "CC0000", orange: "FF6600", yellow: "FFCC00",
+    slate: "2B3445", ink: "1A1A2E", sub: "4A4A6A",
+    rule: "E0E0E0", light: "F5F5F0", paper: "FAFAF7", white: "FFFFFF"
   };
+  var FT = "Arial";        // body
+  var FH = "Georgia";      // editorial headings (approximates Playfair)
+  var W = 13.33, H = 7.5, MX = 0.62; // slide W/H + side margin (inches)
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var s = document.createElement("script");
-      s.src = src;
-      s.onload = resolve;
+      s.src = src; s.onload = resolve;
       s.onerror = function () { reject(new Error("Failed to load " + src)); };
       document.head.appendChild(s);
     });
   }
-
   function ensureLibs() {
-    var chain = Promise.resolve();
-    if (typeof window.html2canvas === "undefined") {
-      chain = chain.then(function () { return loadScript(CDN.html2canvas); });
-    }
-    if (typeof window.PptxGenJS === "undefined") {
-      chain = chain.then(function () { return loadScript(CDN.pptxgen); });
-    }
-    return chain;
+    if (typeof window.PptxGenJS !== "undefined") return Promise.resolve();
+    return loadScript(PPTX_CDN);
   }
-
   function setBusy(btn, on, text) {
     if (!btn) return;
     if (on) {
@@ -97,52 +98,380 @@
     }
   }
 
+  // ---- DOM read helpers (current language already applied to the DOM) ----
+  function txt(el) { return el ? el.textContent.replace(/\s+/g, " ").trim() : ""; }
+  function texts(parent, sel) {
+    var out = [], n = parent.querySelectorAll(sel);
+    for (var i = 0; i < n.length; i++) { var t = txt(n[i]); if (t) out.push(t); }
+    return out;
+  }
+  // Turn a loaded <img> into a PNG data URL (reuses already-decoded image);
+  // falls back to its URL path if the canvas is tainted (e.g. file://).
+  function imgRef(imgEl) {
+    if (!imgEl) return null;
+    try {
+      var c = document.createElement("canvas");
+      c.width = imgEl.naturalWidth || imgEl.width;
+      c.height = imgEl.naturalHeight || imgEl.height;
+      if (!c.width || !c.height) return { path: imgEl.src };
+      c.getContext("2d").drawImage(imgEl, 0, 0);
+      return { data: c.toDataURL("image/png") };
+    } catch (e) {
+      return { path: imgEl.src };
+    }
+  }
+  function addImg(slide, ref, opts) {
+    if (!ref) return;
+    var o = {};
+    for (var k in opts) o[k] = opts[k];
+    if (ref.data) o.data = ref.data; else o.path = ref.path;
+    slide.addImage(o);
+  }
+
   function exportToPpt(btn) {
     var pages = document.querySelectorAll(".doc .page");
     if (!pages.length) return;
+    setBusy(btn, true, lang === "en" ? "Building deck…" : "Menyusun…");
 
-    setBusy(btn, true, lang === "en" ? "Preparing…" : "Menyiapkan…");
-
-    // Force every reveal element visible so off-screen pages render fully.
+    // Reveal-animated elements may be at opacity 0; not needed for native build,
+    // but force-show so any read of geometry is stable.
     var hidden = document.querySelectorAll(".reveal:not(.in-view)");
     for (var h = 0; h < hidden.length; h++) hidden[h].classList.add("in-view", "ppt-forced");
+
+    var EN = lang === "en";
 
     ensureLibs()
       .then(function () {
         var pptx = new window.PptxGenJS();
-        // A4 portrait in inches (210 × 297 mm).
-        pptx.defineLayout({ name: "A4P", width: 8.27, height: 11.69 });
-        pptx.layout = "A4P";
+        pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 (16:9)
+        pptx.author = "Petra Christian University";
+        pptx.company = "PETRA × DANAMON";
+        pptx.title = EN
+          ? "International Banking Immersion Program"
+          : "Program Imersi Perbankan Internasional";
 
-        var slideW = 8.27, slideH = 11.69;
-
-        function renderPage(i) {
-          if (i >= pages.length) {
-            return pptx.writeFile({ fileName: "PETRA-x-DANAMON-Concept-Paper.pptx" });
-          }
-          var pct = Math.round((i / pages.length) * 100);
-          setBusy(btn, true, (lang === "en" ? "Rendering " : "Membuat ") + pct + "%");
-          return window
-            .html2canvas(pages[i], {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: "#ffffff",
-              logging: false,
-              windowWidth: document.documentElement.scrollWidth
-            })
-            .then(function (canvas) {
-              var img = canvas.toDataURL("image/jpeg", 0.92);
-              var slide = pptx.addSlide();
-              slide.background = { color: "FFFFFF" };
-              slide.addImage({ data: img, x: 0, y: 0, w: slideW, h: slideH });
-              return renderPage(i + 1);
-            });
+        // ---------- shared chrome ----------
+        function gradBar(s, x, y, w, hh) {
+          var seg = w / 3;
+          s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: seg, h: hh, fill: { color: C.red } });
+          s.addShape(pptx.ShapeType.rect, { x: x + seg, y: y, w: seg, h: hh, fill: { color: C.orange } });
+          s.addShape(pptx.ShapeType.rect, { x: x + 2 * seg, y: y, w: w - 2 * seg, h: hh, fill: { color: C.yellow } });
+        }
+        function footer(s, num) {
+          s.addShape(pptx.ShapeType.line, { x: MX, y: 7.04, w: W - 2 * MX, h: 0, line: { color: C.rule, width: 1 } });
+          s.addText("PETRA × DANAMON", { x: MX, y: 7.06, w: 5, h: 0.3, fontFace: FT, fontSize: 8, color: C.sub, align: "left" });
+          s.addText(EN ? "Concept Paper · Confidential" : "Makalah Konsep · Rahasia", { x: W / 2 - 2.5, y: 7.06, w: 5, h: 0.3, fontFace: FT, fontSize: 8, color: C.sub, align: "center" });
+          if (num) s.addText(String(num), { x: W - MX - 1, y: 7.06, w: 1, h: 0.3, fontFace: FT, fontSize: 8, bold: true, color: C.blue, align: "right" });
+        }
+        function header(s, kicker, title) {
+          s.background = { color: C.white };
+          gradBar(s, 0, 0, W, 0.16);
+          if (kicker) s.addText(kicker.toUpperCase(), { x: MX, y: 0.42, w: W - 2 * MX, h: 0.3, fontFace: FT, fontSize: 11, bold: true, color: C.green, charSpacing: 2 });
+          s.addText(title, { x: MX, y: 0.72, w: W - 2 * MX, h: 0.7, fontFace: FH, fontSize: 28, bold: true, color: C.blueDk });
+          gradBar(s, MX, 1.46, 1.05, 0.055);
+        }
+        // light card with optional colored accent strip on top
+        function card(s, x, y, w, hh, stripColor) {
+          s.addShape(pptx.ShapeType.roundRect, { x: x, y: y, w: w, h: hh, rectRadius: 0.06, fill: { color: C.white }, line: { color: C.rule, width: 1 } });
+          if (stripColor) s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: w, h: 0.07, fill: { color: stripColor } });
         }
 
-        return renderPage(0);
+        var prog = 0, total = pages.length;
+        function tick() { prog++; setBusy(btn, true, (EN ? "Building " : "Menyusun ") + Math.round((prog / total) * 100) + "%"); }
+
+        // ================= SLIDE 1 — COVER =================
+        (function () {
+          var p = pages[0], s = pptx.addSlide();
+          s.background = { color: C.blueDk };
+          gradBar(s, 0, 0, W, 0.22);
+          gradBar(s, 0, H - 0.22, W, 0.22);
+
+          // logos on white pills
+          var petra = imgRef(p.querySelector(".logo-img.petra"));
+          var dana = imgRef(p.querySelector(".logo-img.danamon"));
+          var pillY = 0.95, pillH = 0.92;
+          s.addShape(pptx.ShapeType.roundRect, { x: 4.35, y: pillY, w: 2.0, h: pillH, rectRadius: 0.08, fill: { color: C.white } });
+          s.addShape(pptx.ShapeType.roundRect, { x: 6.98, y: pillY, w: 2.0, h: pillH, rectRadius: 0.08, fill: { color: C.white } });
+          addImg(s, petra, { x: 4.5, y: pillY + 0.16, w: 1.7, h: pillH - 0.32, sizing: { type: "contain", w: 1.7, h: pillH - 0.32 } });
+          addImg(s, dana, { x: 7.13, y: pillY + 0.16, w: 1.7, h: pillH - 0.32, sizing: { type: "contain", w: 1.7, h: pillH - 0.32 } });
+          s.addText("×", { x: 6.35, y: pillY, w: 0.63, h: pillH, align: "center", valign: "middle", fontFace: FH, fontSize: 26, color: C.white });
+
+          s.addText(EN ? "Concept Paper · 2026" : "Makalah Konsep · 2026", { x: 1, y: 2.35, w: W - 2, h: 0.3, align: "center", fontFace: FT, fontSize: 12, color: C.yellow, charSpacing: 3 });
+          s.addText(txt(p.querySelector(".ttl1")) || "PETRA × DANAMON", { x: 0.8, y: 2.7, w: W - 1.6, h: 0.95, align: "center", fontFace: FH, fontSize: 46, bold: true, color: C.white });
+          s.addText(txt(p.querySelector(".ttl2")), { x: 1.4, y: 3.75, w: W - 2.8, h: 0.6, align: "center", fontFace: FH, italic: true, fontSize: 22, color: "DCE6F7" });
+          s.addText(txt(p.querySelector(".sub")), { x: 1, y: 4.45, w: W - 2, h: 0.35, align: "center", fontFace: FT, fontSize: 13, color: "AFC2E0" });
+          gradBar(s, W / 2 - 0.6, 4.95, 1.2, 0.045);
+          s.addText(txt(p.querySelector(".cover-tag")), { x: 2.2, y: 5.15, w: W - 4.4, h: 0.7, align: "center", fontFace: FH, italic: true, fontSize: 15, color: "EDEFF5" });
+          s.addText(txt(p.querySelector(".cover-badge")), { x: 1, y: 6.55, w: W - 2, h: 0.3, align: "center", fontFace: FT, fontSize: 10, color: "8FA4C6", charSpacing: 1 });
+          tick();
+        })();
+
+        // helper: section number from .sec-num-bg or kicker
+        function kickerOf(p) { return txt(p.querySelector(".sec-kicker")); }
+        function titleOf(p) { return txt(p.querySelector(".sec-title")); }
+
+        // ================= SLIDE 2 — EXECUTIVE SUMMARY =================
+        (function () {
+          var p = pages[1], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var paras = texts(p, ".body");
+          var body = paras.map(function (t, i) {
+            return { text: t, options: { breakLine: true, paraSpaceAfter: 9, paraSpaceBefore: i ? 0 : 0 } };
+          });
+          s.addText(body, { x: MX, y: 1.78, w: 7.35, h: 4.9, valign: "top", fontFace: FT, fontSize: 11.5, color: C.ink, lineSpacingMultiple: 1.02 });
+
+          // pull quote callout
+          var pull = txt(p.querySelector(".pull p"));
+          s.addShape(pptx.ShapeType.roundRect, { x: 8.25, y: 1.78, w: 4.45, h: 2.55, rectRadius: 0.06, fill: { color: "EFF5F1" }, line: { color: C.green, width: 1 } });
+          s.addShape(pptx.ShapeType.rect, { x: 8.25, y: 1.78, w: 0.09, h: 2.55, fill: { color: C.green } });
+          s.addText(pull, { x: 8.55, y: 1.95, w: 3.95, h: 2.2, valign: "middle", fontFace: FH, italic: true, fontSize: 15, color: C.green });
+
+          var photo = imgRef(p.querySelector(".doc-photo img"));
+          s.addShape(pptx.ShapeType.rect, { x: 8.25, y: 4.5, w: 4.45, h: 0.06, fill: { color: C.orange } });
+          addImg(s, photo, { x: 8.25, y: 4.56, w: 4.45, h: 2.18, sizing: { type: "cover", w: 4.45, h: 2.18 } });
+          footer(s, 2); tick();
+        })();
+
+        // ================= SLIDE 3 — AT A GLANCE =================
+        (function () {
+          var p = pages[2], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var rows = [];
+          var trs = p.querySelectorAll("table.glance tr");
+          for (var i = 0; i < trs.length; i++) {
+            var tds = trs[i].querySelectorAll("td");
+            if (tds.length < 2) continue;
+            rows.push([
+              { text: txt(tds[0]), options: { bold: true, color: C.green, fill: { color: "F4F8F5" }, valign: "middle" } },
+              { text: txt(tds[1]), options: { color: C.ink, valign: "middle" } }
+            ]);
+          }
+          s.addTable(rows, { x: MX, y: 1.78, w: 7.2, colW: [2.5, 4.7], fontFace: FT, fontSize: 10.5, border: { type: "solid", color: C.rule, pt: 1 }, rowH: 0.34, valign: "middle" });
+
+          // theme block (right)
+          s.addShape(pptx.ShapeType.roundRect, { x: 8.15, y: 1.78, w: 4.55, h: 4.9, rectRadius: 0.06, fill: { color: C.light }, line: { color: C.rule, width: 1 } });
+          s.addShape(pptx.ShapeType.rect, { x: 8.15, y: 1.78, w: 4.55, h: 0.07, fill: { color: C.orange } });
+          s.addText(EN ? "PROGRAM THEME" : "TEMA PROGRAM", { x: 8.4, y: 2.0, w: 4.1, h: 0.3, fontFace: FT, fontSize: 10, bold: true, color: C.green, charSpacing: 2 });
+          s.addText(txt(p.querySelector(".t-quote")), { x: 8.4, y: 2.35, w: 4.1, h: 1.7, fontFace: FH, italic: true, fontSize: 15, color: C.blueDk, valign: "top" });
+          s.addText(txt(p.querySelector(".theme-block .body")), { x: 8.4, y: 4.05, w: 4.1, h: 2.5, fontFace: FT, fontSize: 10.5, color: C.ink, valign: "top", lineSpacingMultiple: 1.03 });
+          footer(s, 3); tick();
+        })();
+
+        // ================= SLIDE 4 — FOUR PILLARS =================
+        (function () {
+          var p = pages[3], s = pptx.addSlide();
+          header(s, EN ? "Program Overview" : "Gambaran Program", titleOf(p));
+          var strips = [C.blue, C.green, C.orange, C.slate];
+          var cards = p.querySelectorAll(".pillar-card");
+          var gx = MX, gy = 1.72, gw = (W - 2 * MX - 0.4) / 2, gh = 2.42, gapx = 0.4, gapy = 0.34;
+          for (var i = 0; i < cards.length && i < 4; i++) {
+            var col = i % 2, row = Math.floor(i / 2);
+            var x = gx + col * (gw + gapx), y = gy + row * (gh + gapy);
+            card(s, x, y, gw, gh, strips[i]);
+            s.addText(txt(cards[i].querySelector(".pillar-head")), { x: x + 0.2, y: y + 0.16, w: gw - 0.4, h: 0.32, fontFace: FH, bold: true, fontSize: 14, color: C.blueDk });
+            s.addText(txt(cards[i].querySelector(".pillar-sub")), { x: x + 0.2, y: y + 0.5, w: gw - 0.4, h: 0.26, fontFace: FT, fontSize: 9.5, italic: true, color: C.green });
+            var lis = texts(cards[i], "li");
+            var bl = lis.map(function (t) { return { text: t, options: { bullet: { code: "2022", indent: 12 }, breakLine: true, paraSpaceAfter: 2 } }; });
+            if (bl.length) {
+              s.addText(bl, { x: x + 0.2, y: y + 0.8, w: gw - 0.4, h: gh - 0.95, valign: "top", fontFace: FT, fontSize: 9, color: C.ink });
+            } else {
+              s.addText(txt(cards[i].querySelector("p")), { x: x + 0.2, y: y + 0.8, w: gw - 0.4, h: gh - 0.95, valign: "top", fontFace: FT, fontSize: 9.5, color: C.ink });
+            }
+          }
+          footer(s, 4); tick();
+        })();
+
+        // ================= SLIDE 5 — COHORT + OUTCOMES =================
+        (function () {
+          var p = pages[4], s = pptx.addSlide();
+          header(s, EN ? "Program Overview" : "Gambaran Program", EN ? "Cohort & Participant Outcomes" : "Komposisi & Hasil Peserta");
+          // cohort table (left)
+          var rows = [];
+          var trs = p.querySelectorAll("table.data tr");
+          for (var i = 0; i < trs.length; i++) {
+            var cells = trs[i].querySelectorAll("th,td");
+            var isHead = trs[i].querySelectorAll("th").length > 0;
+            var isTot = trs[i].className.indexOf("tot") >= 0;
+            var r = [];
+            for (var j = 0; j < cells.length; j++) {
+              r.push({ text: txt(cells[j]), options: {
+                bold: isHead || isTot || j === 0,
+                color: isHead ? C.white : (isTot ? C.blueDk : C.ink),
+                fill: { color: isHead ? C.blue : (isTot ? "EAF0F8" : C.white) },
+                align: j === 0 ? "left" : "center", valign: "middle"
+              } });
+            }
+            rows.push(r);
+          }
+          s.addText(EN ? "Cohort Composition" : "Komposisi Peserta", { x: MX, y: 1.72, w: 6, h: 0.3, fontFace: FT, fontSize: 11, bold: true, color: C.green });
+          s.addTable(rows, { x: MX, y: 2.06, w: 6.0, colW: [2.8, 1.6, 1.6], fontFace: FT, fontSize: 10, border: { type: "solid", color: C.rule, pt: 1 }, rowH: 0.36, valign: "middle" });
+
+          // outcomes (right)
+          s.addText(EN ? "Participant Outcomes" : "Hasil bagi Peserta", { x: 7.0, y: 1.72, w: 5.7, h: 0.3, fontFace: FT, fontSize: 11, bold: true, color: C.green });
+          var outs = p.querySelectorAll(".outcome");
+          var oy = 2.06;
+          for (var k = 0; k < outs.length; k++) {
+            var b = txt(outs[k].querySelector("b")), d = txt(outs[k].querySelector("span"));
+            s.addShape(pptx.ShapeType.ellipse, { x: 7.0, y: oy + 0.04, w: 0.16, h: 0.16, fill: { color: C.orange } });
+            s.addText([
+              { text: b + "  ", options: { bold: true, color: C.blueDk } },
+              { text: d, options: { color: C.sub } }
+            ], { x: 7.28, y: oy - 0.06, w: 5.4, h: 0.78, valign: "top", fontFace: FT, fontSize: 10 });
+            oy += 0.9;
+          }
+          footer(s, 5); tick();
+        })();
+
+        // generic "numbered subsections" slide (heading + paragraph blocks)
+        function subsecSlide(p, num, opts) {
+          opts = opts || {};
+          var s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var blocks = p.querySelectorAll(opts.sel || ".subsec");
+          var cols = opts.cols || 2;
+          var rowsN = Math.ceil(blocks.length / cols);
+          var gx = MX, gy = 1.74, gw = (W - 2 * MX - (cols - 1) * 0.4) / cols, gapx = 0.4;
+          var availH = 6.9 - gy, gh = (availH - (rowsN - 1) * 0.28) / rowsN;
+          for (var i = 0; i < blocks.length; i++) {
+            var col = i % cols, row = Math.floor(i / cols);
+            var x = gx + col * (gw + gapx), y = gy + row * (gh + 0.28);
+            s.addShape(pptx.ShapeType.rect, { x: x, y: y + 0.04, w: 0.07, h: gh - 0.08, fill: { color: C.orange } });
+            var head = txt(blocks[i].querySelector("h3,h4"));
+            var para = txt(blocks[i].querySelector("p"));
+            var lab = txt(blocks[i].querySelector(".lab"));
+            s.addText((lab ? lab + "  " : "") + head, { x: x + 0.22, y: y, w: gw - 0.3, h: 0.5, fontFace: FH, bold: true, fontSize: opts.headSize || 13, color: C.blueDk, valign: "top" });
+            s.addText(para, { x: x + 0.22, y: y + (opts.headGap || 0.52), w: gw - 0.3, h: gh - (opts.headGap || 0.52), fontFace: FT, fontSize: opts.bodySize || 10, color: C.ink, valign: "top", lineSpacingMultiple: 1.02 });
+          }
+          footer(s, num);
+          return s;
+        }
+
+        // ================= SLIDE 6 — WHY THIS, WHY NOW =================
+        (function () { subsecSlide(pages[5], 6, { cols: 2, headSize: 13, bodySize: 10 }); tick(); })();
+
+        // ================= SLIDE 7 — WHAT DANAMON GETS =================
+        (function () { subsecSlide(pages[6], 7, { sel: ".benefit", cols: 3, headSize: 11.5, bodySize: 9, headGap: 0.62 }); tick(); })();
+
+        // ================= SLIDE 8 — DANAMON'S VALUE AT A GLANCE =================
+        (function () {
+          var p = pages[7], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var vcards = p.querySelectorAll(".value-card");
+          var cols = 3, gx = MX, gy = 1.74, gw = (W - 2 * MX - 2 * 0.34) / 3, gh = 1.55, gapx = 0.34, gapy = 0.3;
+          for (var i = 0; i < vcards.length && i < 6; i++) {
+            var col = i % cols, row = Math.floor(i / cols);
+            var x = gx + col * (gw + gapx), y = gy + row * (gh + gapy);
+            card(s, x, y, gw, gh, C.green);
+            s.addShape(pptx.ShapeType.ellipse, { x: x + 0.18, y: y + 0.22, w: 0.42, h: 0.42, fill: { color: C.blue } });
+            s.addText(String(i + 1), { x: x + 0.18, y: y + 0.22, w: 0.42, h: 0.42, align: "center", valign: "middle", fontFace: FT, bold: true, fontSize: 13, color: C.white });
+            s.addText(txt(vcards[i].querySelector("h4")), { x: x + 0.72, y: y + 0.2, w: gw - 0.9, h: 0.46, fontFace: FH, bold: true, fontSize: 12.5, color: C.blueDk, valign: "middle" });
+            s.addText(txt(vcards[i].querySelector("p")), { x: x + 0.2, y: y + 0.74, w: gw - 0.4, h: gh - 0.86, fontFace: FT, fontSize: 9.5, color: C.ink, valign: "top" });
+          }
+          // feature box
+          var fy = gy + 2 * (gh + gapy);
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: fy, w: W - 2 * MX, h: 0.95, rectRadius: 0.06, fill: { color: C.blueDk } });
+          s.addText("★", { x: MX + 0.25, y: fy, w: 0.7, h: 0.95, align: "center", valign: "middle", fontFace: FT, fontSize: 26, color: C.yellow });
+          s.addText([
+            { text: txt(p.querySelector(".vf-label")) + "  —  ", options: { bold: true, color: C.yellow } },
+            { text: txt(p.querySelector(".vf-quote")), options: { color: C.white, italic: true } }
+          ], { x: MX + 1.05, y: fy, w: W - 2 * MX - 1.3, h: 0.95, valign: "middle", fontFace: FT, fontSize: 12 });
+          footer(s, 8); tick();
+        })();
+
+        // ================= SLIDE 9 — WHAT PETRA BRINGS =================
+        (function () {
+          var s = subsecSlide(pages[8], 9, { cols: 2, headSize: 12.5, bodySize: 9.5 });
+          tick();
+        })();
+
+        // ================= SLIDE 10 — PARTNERSHIP ASK =================
+        (function () {
+          var p = pages[9], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var asks = p.querySelectorAll(".ask");
+          var gx = MX, gy = 1.74, gw = 7.4, gapy = 0.2;
+          var gh = (6.85 - gy - 3 * gapy) / 4;
+          for (var i = 0; i < asks.length && i < 4; i++) {
+            var y = gy + i * (gh + gapy);
+            s.addShape(pptx.ShapeType.roundRect, { x: gx, y: y, w: gw, h: gh, rectRadius: 0.05, fill: { color: C.light }, line: { color: C.rule, width: 1 } });
+            s.addShape(pptx.ShapeType.rect, { x: gx, y: y, w: 0.08, h: gh, fill: { color: C.green } });
+            var head = txt(asks[i].querySelector("h3"));
+            var para = txt(asks[i].querySelector("p"));
+            var lis = texts(asks[i], "li");
+            if (!para && lis.length) para = lis.join(" · ");
+            s.addText(head, { x: gx + 0.22, y: y + 0.1, w: gw - 0.4, h: 0.34, fontFace: FH, bold: true, fontSize: 12, color: C.blueDk });
+            s.addText(para, { x: gx + 0.22, y: y + 0.44, w: gw - 0.4, h: gh - 0.5, fontFace: FT, fontSize: 9.3, color: C.ink, valign: "top" });
+          }
+          // "does NOT need" box (right)
+          var nx = gx + gw + 0.35, nw = W - MX - nx;
+          s.addShape(pptx.ShapeType.roundRect, { x: nx, y: gy, w: nw, h: 6.85 - gy, rectRadius: 0.06, fill: { color: "FBEEEE" }, line: { color: C.red, width: 1 } });
+          s.addText(txt(p.querySelector(".notneed h4")), { x: nx + 0.25, y: gy + 0.18, w: nw - 0.5, h: 0.7, fontFace: FH, bold: true, fontSize: 13, color: C.red, valign: "top" });
+          var cks = p.querySelectorAll(".notneed .ck");
+          var cy = gy + 1.0;
+          for (var j = 0; j < cks.length; j++) {
+            var sp = cks[j].querySelector("span:last-child");
+            s.addText("✕", { x: nx + 0.25, y: cy, w: 0.3, h: 0.4, fontFace: FT, fontSize: 12, bold: true, color: C.red });
+            s.addText(txt(sp), { x: nx + 0.6, y: cy - 0.02, w: nw - 0.85, h: 0.9, fontFace: FT, fontSize: 10, color: C.ink, valign: "top" });
+            cy += 1.0;
+          }
+          footer(s, 10); tick();
+        })();
+
+        // ================= SLIDE 11 — PILOT YEAR FRAMING =================
+        (function () {
+          var p = pages[10], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          // hero line
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 1.74, w: W - 2 * MX, h: 1.15, rectRadius: 0.06, fill: { color: "EAF0F8" } });
+          s.addText(txt(p.querySelector(".pilot-hero .tag")) || (EN ? "Year 1 = Pilot" : "Tahun 1 = Percontohan"), { x: MX + 0.25, y: 1.9, w: 2.2, h: 0.4, fontFace: FT, bold: true, fontSize: 12, color: C.white, align: "center", valign: "middle", fill: { color: C.green } });
+          s.addText(txt(p.querySelector(".pilot-hero p")), { x: MX + 2.7, y: 1.84, w: W - 2 * MX - 2.95, h: 0.95, fontFace: FT, fontSize: 10.5, color: C.ink, valign: "middle" });
+
+          var pcards = p.querySelectorAll(".pilot-card");
+          var cols = 4, gx = MX, gy = 3.15, gw = (W - 2 * MX - 3 * 0.3) / 4, gh = 2.0, gapx = 0.3;
+          for (var i = 0; i < pcards.length && i < 4; i++) {
+            var x = gx + i * (gw + gapx);
+            card(s, x, gy, gw, gh, C.orange);
+            s.addText("✓", { x: x + 0.2, y: gy + 0.18, w: 0.5, h: 0.5, fontFace: FT, bold: true, fontSize: 20, color: C.green });
+            s.addText(txt(pcards[i].querySelector(".pc-text")), { x: x + 0.2, y: gy + 0.7, w: gw - 0.4, h: gh - 0.85, fontFace: FT, fontSize: 10, color: C.ink, valign: "top" });
+          }
+          // close line
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 5.4, w: W - 2 * MX, h: 1.4, rectRadius: 0.06, fill: { color: C.blueDk } });
+          s.addShape(pptx.ShapeType.rect, { x: MX, y: 5.4, w: W - 2 * MX, h: 0.07, fill: { color: C.orange } });
+          s.addText(txt(p.querySelector(".pilot-close p")), { x: MX + 0.4, y: 5.5, w: W - 2 * MX - 0.8, h: 1.2, fontFace: FH, italic: true, fontSize: 14, color: C.white, valign: "middle", align: "center" });
+          footer(s, 11); tick();
+        })();
+
+        // ================= SLIDE 12 — NEXT STEPS + CLOSING =================
+        (function () {
+          var p = pages[11], s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p));
+          var items = p.querySelectorAll(".tl-item");
+          var n = Math.min(items.length, 5);
+          var gx = MX, gy = 1.74, gw = (W - 2 * MX - (n - 1) * 0.25) / n, gapx = 0.25, gh = 3.1;
+          for (var i = 0; i < n; i++) {
+            var x = gx + i * (gw + gapx);
+            card(s, x, gy, gw, gh, C.green);
+            s.addShape(pptx.ShapeType.ellipse, { x: x + gw / 2 - 0.28, y: gy + 0.22, w: 0.56, h: 0.56, fill: { color: C.green } });
+            s.addText(String(i + 1), { x: x + gw / 2 - 0.28, y: gy + 0.22, w: 0.56, h: 0.56, align: "center", valign: "middle", fontFace: FT, bold: true, fontSize: 16, color: C.white });
+            s.addText(txt(items[i].querySelector("h4")), { x: x + 0.15, y: gy + 0.9, w: gw - 0.3, h: 0.7, align: "center", fontFace: FH, bold: true, fontSize: 11, color: C.blueDk, valign: "top" });
+            s.addText(txt(items[i].querySelector("p")), { x: x + 0.15, y: gy + 1.6, w: gw - 0.3, h: gh - 1.7, align: "center", fontFace: FT, fontSize: 8.3, color: C.sub, valign: "top" });
+          }
+          // one ask
+          var bigAsk = txt(p.querySelector(".oneask .big"));
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 5.2, w: W - 2 * MX, h: 1.55, rectRadius: 0.06, fill: { color: C.blueDk } });
+          gradBar(s, MX, 5.2, W - 2 * MX, 0.07);
+          s.addText(EN ? "ONE SIMPLE ASK RIGHT NOW" : "SATU PERMINTAAN SEDERHANA SAAT INI", { x: MX + 0.4, y: 5.42, w: W - 2 * MX - 0.8, h: 0.3, fontFace: FT, fontSize: 10, bold: true, color: C.yellow, charSpacing: 2, align: "center" });
+          s.addText([
+            { text: (EN ? "We ask for " : "Kami meminta "), options: { color: "DCE6F7", fontSize: 16 } },
+            { text: bigAsk, options: { color: C.white, bold: true, italic: true, fontSize: 26, fontFace: FH } }
+          ], { x: MX + 0.4, y: 5.7, w: W - 2 * MX - 0.8, h: 0.9, align: "center", valign: "middle" });
+          footer(s, 12); tick();
+        })();
+
+        return pptx.writeFile({ fileName: "PETRA-x-DANAMON-Presentation.pptx" });
       })
       .catch(function (err) {
-        alert((lang === "en" ? "Export failed: " : "Ekspor gagal: ") + err.message);
+        alert((EN ? "Export failed: " : "Ekspor gagal: ") + (err && err.message ? err.message : err));
       })
       .then(function () {
         var forced = document.querySelectorAll(".ppt-forced");
