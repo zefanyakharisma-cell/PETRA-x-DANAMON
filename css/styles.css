@@ -437,6 +437,60 @@ ul.tight li::before{content:"";position:absolute;left:0;top:7px;width:5px;height
 .pilot-close .em{color:#FFCC00;font-weight:700;font-style:normal;}
 
 /* =========================================================
+   RUNDOWN (program schedule)
+   ========================================================= */
+.rd-day{margin-bottom:12px;}
+.rd-day-head{
+  display:flex;align-items:baseline;gap:11px;
+  border-left:4px solid transparent;border-image:var(--guiding-gradient) 1;
+  background:#FAFAF7;padding:6px 13px;margin-bottom:3px;
+}
+.rd-day-head .rd-d{font-family:'Playfair Display',serif;font-weight:700;color:var(--petra-blue);font-size:15px;}
+.rd-day-head .rd-t{font-size:11px;font-weight:700;color:var(--danamon-green);letter-spacing:.6px;text-transform:uppercase;}
+table.rd-table{width:100%;border-collapse:collapse;margin:0 0 2px;font-size:10.6px;}
+table.rd-table td{padding:4px 9px;border-bottom:1px solid var(--rule-line);vertical-align:top;line-height:1.34;}
+table.rd-table tr:nth-child(even) td{background:#F4F6F9;}
+table.rd-table .rd-time{white-space:nowrap;font-weight:700;color:var(--petra-blue);width:13%;}
+table.rd-table .rd-act{width:49%;color:var(--body-text);}
+table.rd-table .rd-act .note{display:block;color:var(--subtext);font-size:9.5px;font-style:italic;margin-top:1px;}
+table.rd-table .rd-loc{width:23%;color:var(--body-text);}
+table.rd-table .rd-pic{width:15%;color:var(--subtext);font-size:9.8px;}
+.rd-legend{margin-top:10px;font-size:10px;color:var(--subtext);font-style:italic;line-height:1.5;}
+
+/* =========================================================
+   RAB (budget table)
+   ========================================================= */
+table.rab{width:100%;border-collapse:collapse;margin:4px 0 8px;font-size:10px;}
+table.rab th{background:var(--petra-blue);color:#fff;font-weight:600;padding:5px 9px;text-align:left;font-size:10px;}
+table.rab th.num,table.rab td.num{text-align:right;white-space:nowrap;}
+table.rab th.c-no{width:5%;}
+table.rab td{padding:2.6px 9px;border-bottom:1px solid var(--rule-line);vertical-align:middle;line-height:1.25;}
+table.rab tr.cat td{background:var(--danamon-green);color:#fff;font-weight:700;font-size:10px;letter-spacing:.4px;padding:3.4px 9px;}
+table.rab tr.sub td{background:#EAF0F8;font-weight:700;color:var(--petra-blue);}
+table.rab tr.prog td{background:#E2E9F2;font-weight:700;color:var(--petra-blue-dk);}
+table.rab tr.cont td{background:#FFF3E6;font-weight:700;color:#B24B00;}
+table.rab tr.grand td{background:var(--petra-blue);color:#fff;font-weight:700;font-size:11.5px;padding:6px 9px;}
+
+/* =========================================================
+   BUDGET SUMMARY CARDS
+   ========================================================= */
+.bud-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin:8px 0 6px;}
+.bud-card{
+  border:1px solid var(--rule-line);border-top:4px solid var(--danamon-green);
+  border-radius:8px;padding:13px 16px;background:#fff;box-shadow:0 4px 14px rgba(0,32,90,.05);
+}
+.bud-card .bc-lbl{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--danamon-green);margin-bottom:6px;}
+.bud-card .bc-val{font-family:'Playfair Display',serif;font-weight:800;font-size:25px;color:var(--petra-blue);line-height:1;}
+.bud-card .bc-val .bc-u{font-size:13px;font-weight:600;margin-left:2px;color:var(--subtext);}
+.bud-card .bc-sub{font-size:10px;color:var(--subtext);margin-top:5px;line-height:1.35;}
+.bud-card.feature{border-top-color:var(--guiding-light-orange);background:var(--petra-blue);}
+.bud-card.feature .bc-lbl{color:var(--guiding-light-yellow);}
+.bud-card.feature .bc-val{color:#fff;}
+.bud-card.feature .bc-val .bc-u{color:#cfe0f5;}
+.bud-card.feature .bc-sub{color:#cfe0f5;}
+.gn-note{font-weight:400;color:var(--subtext);font-size:10.5px;font-style:italic;}
+
+/* =========================================================
    RESPONSIVE (screen only)
    ========================================================= */
 @media (max-width:840px){
@@ -446,6 +500,8 @@ ul.tight li::before{content:"";position:absolute;left:0;top:7px;width:5px;height
   .page{width:100%;height:auto;min-height:0;padding:40px 28px 64px;}
   .cover-top{padding:40px 28px;}
   .cover-bottom{padding:36px 28px;}
+  .bud-summary{grid-template-columns:1fr 1fr;}
+  table.rab,table.rd-table{font-size:10px;}
 }
 
 /* =========================================================

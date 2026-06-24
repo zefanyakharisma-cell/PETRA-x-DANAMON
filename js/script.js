@@ -176,7 +176,7 @@
           if (stripColor) s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: w, h: 0.07, fill: { color: stripColor } });
         }
 
-        var prog = 0, total = pages.length;
+        var prog = 0, total = pages.length + 1; // 12 doc slides + 3 rundown + 2 budget
         function tick() { prog++; setBusy(btn, true, (EN ? "Building " : "Menyusun ") + Math.round((prog / total) * 100) + "%"); }
 
         // ================= SLIDE 1 — COVER =================
@@ -466,6 +466,127 @@
             { text: bigAsk, options: { color: C.white, bold: true, italic: true, fontSize: 26, fontFace: FH } }
           ], { x: MX + 0.4, y: 5.7, w: W - 2 * MX - 0.8, h: 0.9, align: "center", valign: "middle" });
           footer(s, 12); tick();
+        })();
+
+        // ================= RUNDOWN SLIDES (13–15) =================
+        function rdDayData(dayEl) {
+          var head = dayEl.querySelector(".rd-day-head");
+          var dnum = head ? txt(head.querySelector(".rd-d")) : "";
+          var theme = head ? txt(head.querySelector(".rd-t")) : "";
+          var rows = dayEl.querySelectorAll("tr"), items = [];
+          for (var i = 0; i < rows.length; i++) {
+            if (rows[i].getAttribute("data-minor") === "1") continue;
+            var time = txt(rows[i].querySelector(".rd-time"));
+            var actEl = rows[i].querySelector(".rd-act");
+            var noteEl = actEl ? actEl.querySelector(".note") : null;
+            var note = noteEl ? txt(noteEl) : "";
+            var main = txt(actEl);
+            if (note) main = main.replace(note, "").trim();
+            items.push({ time: time, act: main });
+          }
+          return { dnum: dnum, theme: theme, items: items };
+        }
+        function rundownSlide(dayEls, sub, num) {
+          var s = pptx.addSlide();
+          header(s, EN ? "Program Schedule" : "Jadwal Program", EN ? "Program Rundown" : "Rundown Program");
+          s.addText(sub, { x: MX, y: 1.5, w: W - 2 * MX, h: 0.3, fontFace: FT, fontSize: 11, italic: true, color: C.sub });
+          var n = dayEls.length, gap = 0.32, gx = MX, gy = 1.98, gw = (W - 2 * MX - (n - 1) * gap) / n, colH = 6.9 - gy;
+          for (var i = 0; i < n; i++) {
+            var d = rdDayData(dayEls[i]);
+            var x = gx + i * (gw + gap);
+            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy, w: gw, h: 0.74, rectRadius: 0.05, fill: { color: C.blueDk } });
+            s.addShape(pptx.ShapeType.rect, { x: x, y: gy, w: gw, h: 0.06, fill: { color: C.orange } });
+            s.addText(d.dnum, { x: x + 0.16, y: gy + 0.08, w: gw - 0.32, h: 0.32, fontFace: FH, bold: true, fontSize: 14, color: C.white });
+            s.addText(d.theme, { x: x + 0.16, y: gy + 0.42, w: gw - 0.32, h: 0.3, fontFace: FT, fontSize: 8.3, color: "DCE6F7" });
+            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy + 0.82, w: gw, h: colH - 0.82, rectRadius: 0.05, fill: { color: C.white }, line: { color: C.rule, width: 1 } });
+            var bl = [];
+            for (var j = 0; j < d.items.length; j++) {
+              bl.push({ text: d.items[j].time, options: { bold: true, color: C.green, fontSize: 9, breakLine: true, paraSpaceBefore: j ? 6 : 0 } });
+              bl.push({ text: d.items[j].act, options: { color: C.ink, fontSize: 9.5, breakLine: true } });
+            }
+            s.addText(bl, { x: x + 0.18, y: gy + 0.97, w: gw - 0.36, h: colH - 1.1, valign: "top", fontFace: FT, lineSpacingMultiple: 1.0 });
+          }
+          footer(s, num);
+        }
+        var rdDays = document.querySelectorAll(".doc .rd-day");
+        if (rdDays.length >= 7) {
+          (function () { rundownSlide([rdDays[0], rdDays[1], rdDays[2]], EN ? "Day 0–2 · Arrival, Opening & PETRA Lectures" : "Hari 0–2 · Kedatangan, Pembukaan & Kuliah PETRA", 13); tick(); })();
+          (function () { rundownSlide([rdDays[3], rdDays[4]], EN ? "Day 3–4 · Danamon Visit & Cultural Immersion" : "Hari 3–4 · Kunjungan Danamon & Imersi Budaya", 14); tick(); })();
+          (function () { rundownSlide([rdDays[5], rdDays[6]], EN ? "Day 5–6 · Capstone, Closing & Departure" : "Hari 5–6 · Capstone, Closing & Keberangkatan", 15); tick(); })();
+        }
+
+        // ================= BUDGET SLIDE 16 — RAB AT A GLANCE =================
+        (function () {
+          var p = document.querySelector(".doc .page table.rab");
+          if (!p) return;
+          p = p.closest(".page");
+          var s = pptx.addSlide();
+          header(s, EN ? "Budget · RAB" : "Anggaran · RAB", EN ? "Budget at a Glance" : "Anggaran Sekilas");
+          var subs = p.querySelectorAll("table.rab tr.sub");
+          var cols = 4, gx = MX, gy = 1.78, gw = (W - 2 * MX - 3 * 0.28) / 4, gh = 1.5, gapx = 0.28, gapy = 0.26;
+          for (var i = 0; i < subs.length; i++) {
+            var col = i % cols, row = Math.floor(i / cols);
+            var x = gx + col * (gw + gapx), y = gy + row * (gh + gapy);
+            card(s, x, y, gw, gh, C.green);
+            s.addText(String.fromCharCode(65 + i), { x: x + 0.16, y: y + 0.14, w: 0.6, h: 0.42, fontFace: FH, bold: true, fontSize: 19, color: C.orange });
+            var name = subs[i].getAttribute("data-cat-" + (EN ? "en" : "id")) || "";
+            s.addText(name, { x: x + 0.16, y: y + 0.6, w: gw - 0.32, h: 0.55, fontFace: FT, bold: true, fontSize: 9.5, color: C.blueDk, valign: "top" });
+            var cells = subs[i].querySelectorAll("td");
+            s.addText("Rp " + txt(cells[cells.length - 1]), { x: x + 0.16, y: y + gh - 0.42, w: gw - 0.32, h: 0.3, fontFace: FT, bold: true, fontSize: 11.5, color: C.green });
+          }
+          var by = gy + 2 * (gh + gapy);
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: by, w: W - 2 * MX, h: 1.2, rectRadius: 0.06, fill: { color: C.blueDk } });
+          gradBar(s, MX, by, W - 2 * MX, 0.07);
+          function fig(tr) { var c = p.querySelectorAll(tr + " .num"); return c.length ? txt(c[0]) : ""; }
+          var seg = (W - 2 * MX) / 3;
+          function totCol(x, lbl, val, hot) {
+            s.addText(lbl.toUpperCase(), { x: x + 0.3, y: by + 0.22, w: seg - 0.6, h: 0.3, fontFace: FT, fontSize: 9.5, bold: true, color: hot ? C.yellow : "AFC2E0", charSpacing: 1, align: "center" });
+            s.addText("Rp " + val, { x: x + 0.3, y: by + 0.52, w: seg - 0.6, h: 0.5, fontFace: FH, bold: true, fontSize: hot ? 21 : 17, color: hot ? C.white : "DCE6F7", align: "center" });
+          }
+          totCol(MX, EN ? "Program Subtotal" : "Subtotal Program", fig("tr.prog"), false);
+          totCol(MX + seg, EN ? "Contingency 10%" : "Contingency 10%", fig("tr.cont"), false);
+          totCol(MX + 2 * seg, EN ? "Grand Total" : "Grand Total", fig("tr.grand"), true);
+          footer(s, 16); tick();
+        })();
+
+        // ================= BUDGET SLIDE 17 — ASSUMPTIONS & COST =================
+        (function () {
+          var cards = document.querySelectorAll(".doc .bud-summary .bud-card");
+          var glance = document.querySelectorAll(".doc .page table.glance");
+          var gp = glance.length ? glance[glance.length - 1] : null; // assumptions table (last glance)
+          if (!cards.length || !gp) return;
+          var s = pptx.addSlide();
+          header(s, EN ? "Budget · Assumptions" : "Anggaran · Asumsi", EN ? "Assumptions & Cost per Participant" : "Asumsi & Biaya per Peserta");
+          // assumptions table (left)
+          var rows = [], trs = gp.querySelectorAll("tr");
+          for (var i = 0; i < trs.length; i++) {
+            var tds = trs[i].querySelectorAll("td");
+            if (tds.length < 2) continue;
+            rows.push([
+              { text: txt(tds[0]), options: { bold: true, color: C.green, fill: { color: "F4F8F5" }, valign: "middle" } },
+              { text: txt(tds[1]), options: { color: C.ink, valign: "middle" } }
+            ]);
+          }
+          s.addText(EN ? "Planning Parameters" : "Parameter Perencanaan", { x: MX, y: 1.72, w: 7, h: 0.3, fontFace: FT, fontSize: 11, bold: true, color: C.green });
+          s.addTable(rows, { x: MX, y: 2.06, w: 7.0, colW: [3.4, 3.6], fontFace: FT, fontSize: 9.5, border: { type: "solid", color: C.rule, pt: 1 }, rowH: 0.3, valign: "middle" });
+          // cost highlight cards (right) — Grand Total, per JP participant, per participant USD
+          var pick = [];
+          for (var k = 0; k < cards.length; k++) {
+            if (cards[k].className.indexOf("feature") >= 0) pick.push(cards[k]);
+          }
+          // ensure we show grand total + the two per-participant cards
+          var perJP = cards[3], perUSD = cards[4];
+          var show = [pick[0] || cards[2], perJP, perUSD];
+          var rx = 8.05, rw = W - MX - rx, ry = 1.72, rh = 1.55, rgap = 0.22;
+          for (var m = 0; m < show.length; m++) {
+            var c = show[m], y = ry + m * (rh + rgap), feat = m === 0;
+            s.addShape(pptx.ShapeType.roundRect, { x: rx, y: y, w: rw, h: rh, rectRadius: 0.06, fill: { color: feat ? C.blueDk : C.white }, line: { color: feat ? C.blueDk : C.rule, width: 1 } });
+            s.addShape(pptx.ShapeType.rect, { x: rx, y: y, w: rw, h: 0.07, fill: { color: feat ? C.orange : C.green } });
+            s.addText(txt(c.querySelector(".bc-lbl")).toUpperCase(), { x: rx + 0.25, y: y + 0.2, w: rw - 0.5, h: 0.3, fontFace: FT, fontSize: 10, bold: true, color: feat ? C.yellow : C.green, charSpacing: 1 });
+            s.addText(txt(c.querySelector(".bc-val")), { x: rx + 0.25, y: y + 0.5, w: rw - 0.5, h: 0.5, fontFace: FH, bold: true, fontSize: 24, color: feat ? C.white : C.blueDk });
+            s.addText(txt(c.querySelector(".bc-sub")), { x: rx + 0.25, y: y + 1.06, w: rw - 0.5, h: 0.4, fontFace: FT, fontSize: 9.5, color: feat ? "CFE0F5" : C.sub });
+          }
+          footer(s, 17); tick();
         })();
 
         return pptx.writeFile({ fileName: "PETRA-x-DANAMON-Presentation.pptx" });

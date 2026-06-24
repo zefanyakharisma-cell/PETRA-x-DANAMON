@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check js/script.js)",
+      "Bash(ls \"/c/Program Files/Google/Chrome/Application/chrome.exe\")",
+      "Bash(ls \"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\")",
+      "Bash(node -e \"try{require.resolve\\('puppeteer'\\);console.log\\('PUPPETEER'\\)}catch\\(e\\){console.log\\('no-puppeteer'\\)}\")",
+      "Bash(rm -f __preview_13.html __preview_14.html __preview_15.html __preview_16.html)",
+      "Bash(ls __preview_*.html)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=\"e:/PETRA x DANAMON/PETRA_x_DANAMON_Concept_Paper.pdf\" \"file:///e:/PETRA%20x%20DANAMON/index.html\")",
+      "Bash(node -e \"const b=require\\('fs'\\).readFileSync\\('PETRA_x_DANAMON_Concept_Paper.pdf','latin1'\\); const m=b.match\\(/\\\\/Type\\\\s*\\\\/Page[^s]/g\\); console.log\\('PDF page count:', m?m.length:'?'\\);\")"
+    ]
+  }
+}
