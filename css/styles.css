@@ -460,16 +460,18 @@ table.rd-table .rd-pic{width:15%;color:var(--subtext);font-size:9.8px;}
 /* =========================================================
    RAB (budget table)
    ========================================================= */
-table.rab{width:100%;border-collapse:collapse;margin:4px 0 8px;font-size:10px;}
-table.rab th{background:var(--petra-blue);color:#fff;font-weight:600;padding:5px 9px;text-align:left;font-size:10px;}
+table.rab{width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:10.6px;}
+table.rab th{background:var(--petra-blue);color:#fff;font-weight:600;padding:6px 9px;text-align:left;font-size:10.4px;}
 table.rab th.num,table.rab td.num{text-align:right;white-space:nowrap;}
 table.rab th.c-no{width:5%;}
-table.rab td{padding:2.6px 9px;border-bottom:1px solid var(--rule-line);vertical-align:middle;line-height:1.25;}
-table.rab tr.cat td{background:var(--danamon-green);color:#fff;font-weight:700;font-size:10px;letter-spacing:.4px;padding:3.4px 9px;}
+table.rab td{padding:4.2px 9px;border-bottom:1px solid var(--rule-line);vertical-align:middle;line-height:1.35;}
+table.rab tr.cat td{background:var(--danamon-green);color:#fff;font-weight:700;font-size:10.6px;letter-spacing:.4px;padding:5px 9px;}
 table.rab tr.sub td{background:#EAF0F8;font-weight:700;color:var(--petra-blue);}
+table.rab tr.carry td{background:#F7F7F2;font-style:italic;color:var(--subtext);font-size:10px;}
 table.rab tr.prog td{background:#E2E9F2;font-weight:700;color:var(--petra-blue-dk);}
 table.rab tr.cont td{background:#FFF3E6;font-weight:700;color:#B24B00;}
-table.rab tr.grand td{background:var(--petra-blue);color:#fff;font-weight:700;font-size:11.5px;padding:6px 9px;}
+table.rab tr.grand td{background:var(--petra-blue);color:#fff;font-weight:700;font-size:12px;padding:7px 9px;}
+.rab-foot{font-size:10.5px;color:var(--subtext);font-style:italic;text-align:right;margin-top:2px;}
 
 /* =========================================================
    BUDGET SUMMARY CARDS

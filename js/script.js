@@ -128,6 +128,51 @@
     slide.addImage(o);
   }
 
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  // Per-section editorial themes (accent rail + ghosted numeral tint + soft fill).
+  // Indexed by slide number so the deck cycles colour with rhythm, not randomly.
+  var THEMES = [
+    { accent: C.blue,   ghost: "EAEFF7", soft: "EAF0F8" },
+    { accent: C.green,  ghost: "EAF2EC", soft: "EFF5F1" },
+    { accent: C.orange, ghost: "FCEEE0", soft: "FFF3E8" },
+    { accent: C.red,    ghost: "F9E8E8", soft: "FBEEEE" }
+  ];
+  function themeFor(num) { return THEMES[((num || 1) - 1) % THEMES.length]; }
+
+  // Photo library — used for the hero cover and editorial accents. Loads from
+  // already-decoded DOM <img>s when present, otherwise fetches the asset fresh.
+  var PHOTOS = {};
+  function preloadPhotos() {
+    var want = [
+      ["building", "Assets/PETRA_BUILDING.png"],
+      ["students", "Assets/PETRA_Students.jpg"],
+      ["intl",     "Assets/PETRA_International Students.jpg"],
+      ["classroom","Assets/PETRA_Class.jpg"],
+      ["painting", "Assets/PETRA_Painting.jpg"],
+      ["painting2","Assets/PETRA_PAINTING_2.jpg"]
+    ];
+    return Promise.all(want.map(function (w) {
+      return new Promise(function (res) {
+        var file = w[1].replace("Assets/", ""), imgs = document.images, found = null;
+        for (var i = 0; i < imgs.length; i++) {
+          if (decodeURIComponent(imgs[i].src).indexOf(file) >= 0 && imgs[i].complete && imgs[i].naturalWidth) {
+            found = imgs[i]; break;
+          }
+        }
+        if (found) { res([w[0], imgRef(found)]); return; }
+        var im = new Image();
+        im.onload = function () { res([w[0], imgRef(im)]); };
+        im.onerror = function () { res([w[0], null]); };
+        im.src = w[1];
+      });
+    })).then(function (pairs) {
+      var o = {};
+      for (var i = 0; i < pairs.length; i++) o[pairs[i][0]] = pairs[i][1];
+      return o;
+    });
+  }
+
   function exportToPpt(btn) {
     var pages = document.querySelectorAll(".doc .page");
     if (!pages.length) return;
@@ -141,7 +186,9 @@
     var EN = lang === "en";
 
     ensureLibs()
-      .then(function () {
+      .then(function () { return preloadPhotos(); })
+      .then(function (photoRefs) {
+        PHOTOS = photoRefs || {};
         var pptx = new window.PptxGenJS();
         pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 (16:9)
         pptx.author = "Petra Christian University";
@@ -158,51 +205,68 @@
           s.addShape(pptx.ShapeType.rect, { x: x + 2 * seg, y: y, w: w - 2 * seg, h: hh, fill: { color: C.yellow } });
         }
         function footer(s, num) {
-          s.addShape(pptx.ShapeType.line, { x: MX, y: 7.04, w: W - 2 * MX, h: 0, line: { color: C.rule, width: 1 } });
-          s.addText("PETRA × DANAMON", { x: MX, y: 7.06, w: 5, h: 0.3, fontFace: FT, fontSize: 8, color: C.sub, align: "left" });
-          s.addText(EN ? "Concept Paper · Confidential" : "Makalah Konsep · Rahasia", { x: W / 2 - 2.5, y: 7.06, w: 5, h: 0.3, fontFace: FT, fontSize: 8, color: C.sub, align: "center" });
-          if (num) s.addText(String(num), { x: W - MX - 1, y: 7.06, w: 1, h: 0.3, fontFace: FT, fontSize: 8, bold: true, color: C.blue, align: "right" });
+          var th = themeFor(num);
+          s.addText("PETRA × DANAMON  ·  " + (EN ? "Concept Paper" : "Makalah Konsep"), { x: MX + 0.04, y: 7.08, w: 7, h: 0.3, fontFace: FT, fontSize: 8, color: C.sub, align: "left" });
+          if (num) s.addText([
+            { text: pad2(num), options: { bold: true, color: th.accent } },
+            { text: " / 17", options: { color: C.sub } }
+          ], { x: W - MX - 1.6, y: 7.08, w: 1.6, h: 0.3, fontFace: FT, fontSize: 9, align: "right" });
         }
-        function header(s, kicker, title) {
-          s.background = { color: C.white };
-          gradBar(s, 0, 0, W, 0.16);
-          if (kicker) s.addText(kicker.toUpperCase(), { x: MX, y: 0.42, w: W - 2 * MX, h: 0.3, fontFace: FT, fontSize: 11, bold: true, color: C.green, charSpacing: 2 });
-          s.addText(title, { x: MX, y: 0.72, w: W - 2 * MX, h: 0.7, fontFace: FH, fontSize: 28, bold: true, color: C.blueDk });
-          gradBar(s, MX, 1.46, 1.05, 0.055);
+        // Editorial section header: full-height accent rail, oversized ghosted
+        // numeral bleeding off the top-right, kicker tile, serif title + rule.
+        function header(s, kicker, title, num) {
+          var th = themeFor(num);
+          s.background = { color: C.paper };
+          s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.26, h: H, fill: { color: th.accent } });
+          if (num) s.addText(pad2(num), { x: W - 4.3, y: -0.75, w: 4.0, h: 3.1, align: "right", valign: "top", fontFace: FH, bold: true, fontSize: 150, color: th.ghost });
+          if (kicker) {
+            s.addShape(pptx.ShapeType.rect, { x: MX, y: 0.55, w: 0.15, h: 0.15, fill: { color: th.accent } });
+            s.addText(kicker.toUpperCase(), { x: MX + 0.28, y: 0.44, w: W - 2 * MX - 0.28, h: 0.34, fontFace: FT, fontSize: 11, bold: true, color: th.accent, charSpacing: 2 });
+          }
+          s.addText(title, { x: MX, y: 0.8, w: W - 2 * MX - 0.8, h: 0.72, fontFace: FH, fontSize: 29, bold: true, color: C.blueDk });
+          s.addShape(pptx.ShapeType.rect, { x: MX, y: 1.52, w: 1.1, h: 0.06, fill: { color: th.accent } });
         }
-        // light card with optional colored accent strip on top
+        // light card with optional colored accent strip on top + soft drop shadow
         function card(s, x, y, w, hh, stripColor) {
-          s.addShape(pptx.ShapeType.roundRect, { x: x, y: y, w: w, h: hh, rectRadius: 0.06, fill: { color: C.white }, line: { color: C.rule, width: 1 } });
-          if (stripColor) s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: w, h: 0.07, fill: { color: stripColor } });
+          s.addShape(pptx.ShapeType.roundRect, { x: x, y: y, w: w, h: hh, rectRadius: 0.06, fill: { color: C.white }, line: { color: C.rule, width: 1 }, shadow: { type: "outer", color: "9AA0A8", blur: 5, offset: 2, angle: 90, opacity: 0.32 } });
+          if (stripColor) s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: w, h: 0.08, fill: { color: stripColor } });
         }
 
-        var prog = 0, total = pages.length + 1; // 12 doc slides + 3 rundown + 2 budget
+        var prog = 0, total = pages.length; // 11 doc + 3 rundown + 2 budget + 1 closing = 17
         function tick() { prog++; setBusy(btn, true, (EN ? "Building " : "Menyusun ") + Math.round((prog / total) * 100) + "%"); }
 
-        // ================= SLIDE 1 — COVER =================
+        // ================= SLIDE 1 — COVER (full-bleed photo hero) =================
         (function () {
           var p = pages[0], s = pptx.addSlide();
           s.background = { color: C.blueDk };
-          gradBar(s, 0, 0, W, 0.22);
-          gradBar(s, 0, H - 0.22, W, 0.22);
 
-          // logos on white pills
+          // Hero photo, full bleed, with a layered dark scrim for legibility.
+          var hero = PHOTOS.building || PHOTOS.intl || PHOTOS.students;
+          addImg(s, hero, { x: 0, y: 0, w: W, h: H, sizing: { type: "cover", w: W, h: H } });
+          s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: W, h: H, fill: { color: C.blueDk, transparency: 32 } });
+          // bottom darkening band so the headline block reads cleanly
+          s.addShape(pptx.ShapeType.rect, { x: 0, y: 3.5, w: W, h: H - 3.5, fill: { color: "001233", transparency: 22 } });
+          gradBar(s, 0, 0, W, 0.2);
+          gradBar(s, 0, H - 0.2, W, 0.2);
+
+          // logo lockup — two white pills, top-left
           var petra = imgRef(p.querySelector(".logo-img.petra"));
           var dana = imgRef(p.querySelector(".logo-img.danamon"));
-          var pillY = 0.95, pillH = 0.92;
-          s.addShape(pptx.ShapeType.roundRect, { x: 4.35, y: pillY, w: 2.0, h: pillH, rectRadius: 0.08, fill: { color: C.white } });
-          s.addShape(pptx.ShapeType.roundRect, { x: 6.98, y: pillY, w: 2.0, h: pillH, rectRadius: 0.08, fill: { color: C.white } });
-          addImg(s, petra, { x: 4.5, y: pillY + 0.16, w: 1.7, h: pillH - 0.32, sizing: { type: "contain", w: 1.7, h: pillH - 0.32 } });
-          addImg(s, dana, { x: 7.13, y: pillY + 0.16, w: 1.7, h: pillH - 0.32, sizing: { type: "contain", w: 1.7, h: pillH - 0.32 } });
-          s.addText("×", { x: 6.35, y: pillY, w: 0.63, h: pillH, align: "center", valign: "middle", fontFace: FH, fontSize: 26, color: C.white });
+          var pillY = 0.7, pillH = 0.86;
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: pillY, w: 1.95, h: pillH, rectRadius: 0.08, fill: { color: C.white }, shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 90, opacity: 0.3 } });
+          s.addShape(pptx.ShapeType.roundRect, { x: MX + 2.55, y: pillY, w: 1.95, h: pillH, rectRadius: 0.08, fill: { color: C.white }, shadow: { type: "outer", color: "000000", blur: 6, offset: 2, angle: 90, opacity: 0.3 } });
+          addImg(s, petra, { x: MX + 0.15, y: pillY + 0.15, w: 1.65, h: pillH - 0.3, sizing: { type: "contain", w: 1.65, h: pillH - 0.3 } });
+          addImg(s, dana, { x: MX + 2.7, y: pillY + 0.15, w: 1.65, h: pillH - 0.3, sizing: { type: "contain", w: 1.65, h: pillH - 0.3 } });
+          s.addText("×", { x: MX + 1.95, y: pillY, w: 0.6, h: pillH, align: "center", valign: "middle", fontFace: FH, fontSize: 24, color: C.white });
 
-          s.addText(EN ? "Concept Paper · 2026" : "Makalah Konsep · 2026", { x: 1, y: 2.35, w: W - 2, h: 0.3, align: "center", fontFace: FT, fontSize: 12, color: C.yellow, charSpacing: 3 });
-          s.addText(txt(p.querySelector(".ttl1")) || "PETRA × DANAMON", { x: 0.8, y: 2.7, w: W - 1.6, h: 0.95, align: "center", fontFace: FH, fontSize: 46, bold: true, color: C.white });
-          s.addText(txt(p.querySelector(".ttl2")), { x: 1.4, y: 3.75, w: W - 2.8, h: 0.6, align: "center", fontFace: FH, italic: true, fontSize: 22, color: "DCE6F7" });
-          s.addText(txt(p.querySelector(".sub")), { x: 1, y: 4.45, w: W - 2, h: 0.35, align: "center", fontFace: FT, fontSize: 13, color: "AFC2E0" });
-          gradBar(s, W / 2 - 0.6, 4.95, 1.2, 0.045);
-          s.addText(txt(p.querySelector(".cover-tag")), { x: 2.2, y: 5.15, w: W - 4.4, h: 0.7, align: "center", fontFace: FH, italic: true, fontSize: 15, color: "EDEFF5" });
-          s.addText(txt(p.querySelector(".cover-badge")), { x: 1, y: 6.55, w: W - 2, h: 0.3, align: "center", fontFace: FT, fontSize: 10, color: "8FA4C6", charSpacing: 1 });
+          // editorial headline block, anchored bottom-left
+          s.addShape(pptx.ShapeType.rect, { x: MX, y: 3.72, w: 0.85, h: 0.07, fill: { color: C.yellow } });
+          s.addText(EN ? "CONCEPT PAPER · 2026" : "MAKALAH KONSEP · 2026", { x: MX + 0.98, y: 3.62, w: 7, h: 0.3, fontFace: FT, fontSize: 12, bold: true, color: C.yellow, charSpacing: 3, valign: "middle" });
+          s.addText(txt(p.querySelector(".ttl1")) || "PETRA × DANAMON", { x: MX - 0.05, y: 3.95, w: 11.4, h: 1.5, align: "left", fontFace: FH, fontSize: 50, bold: true, color: C.white, lineSpacingMultiple: 0.96 });
+          s.addText(txt(p.querySelector(".ttl2")), { x: MX, y: 5.42, w: 10.5, h: 0.55, align: "left", fontFace: FH, italic: true, fontSize: 21, color: "DCE6F7" });
+          s.addText(txt(p.querySelector(".sub")), { x: MX, y: 5.95, w: 10.5, h: 0.32, align: "left", fontFace: FT, fontSize: 13, color: "C9D6EC", charSpacing: 1 });
+          s.addText(txt(p.querySelector(".cover-tag")), { x: MX, y: 6.34, w: 9.8, h: 0.5, align: "left", fontFace: FH, italic: true, fontSize: 13, color: "EDEFF5" });
+          s.addText(txt(p.querySelector(".cover-badge")), { x: MX, y: 6.98, w: W - 2 * MX, h: 0.3, align: "left", fontFace: FT, fontSize: 9.5, color: "9FB2D0", charSpacing: 1 });
           tick();
         })();
 
@@ -213,7 +277,7 @@
         // ================= SLIDE 2 — EXECUTIVE SUMMARY =================
         (function () {
           var p = pages[1], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), 2);
           var paras = texts(p, ".body");
           var body = paras.map(function (t, i) {
             return { text: t, options: { breakLine: true, paraSpaceAfter: 9, paraSpaceBefore: i ? 0 : 0 } };
@@ -235,7 +299,7 @@
         // ================= SLIDE 3 — AT A GLANCE =================
         (function () {
           var p = pages[2], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), 3);
           var rows = [];
           var trs = p.querySelectorAll("table.glance tr");
           for (var i = 0; i < trs.length; i++) {
@@ -260,7 +324,7 @@
         // ================= SLIDE 4 — FOUR PILLARS =================
         (function () {
           var p = pages[3], s = pptx.addSlide();
-          header(s, EN ? "Program Overview" : "Gambaran Program", titleOf(p));
+          header(s, EN ? "Program Overview" : "Gambaran Program", titleOf(p), 4);
           var strips = [C.blue, C.green, C.orange, C.slate];
           var cards = p.querySelectorAll(".pillar-card");
           var gx = MX, gy = 1.72, gw = (W - 2 * MX - 0.4) / 2, gh = 2.42, gapx = 0.4, gapy = 0.34;
@@ -284,7 +348,7 @@
         // ================= SLIDE 5 — COHORT + OUTCOMES =================
         (function () {
           var p = pages[4], s = pptx.addSlide();
-          header(s, EN ? "Program Overview" : "Gambaran Program", EN ? "Cohort & Participant Outcomes" : "Komposisi & Hasil Peserta");
+          header(s, EN ? "Program Overview" : "Gambaran Program", EN ? "Cohort & Participant Outcomes" : "Komposisi & Hasil Peserta", 5);
           // cohort table (left)
           var rows = [];
           var trs = p.querySelectorAll("table.data tr");
@@ -326,7 +390,7 @@
         function subsecSlide(p, num, opts) {
           opts = opts || {};
           var s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), num);
           var blocks = p.querySelectorAll(opts.sel || ".subsec");
           var cols = opts.cols || 2;
           var rowsN = Math.ceil(blocks.length / cols);
@@ -355,7 +419,7 @@
         // ================= SLIDE 8 — DANAMON'S VALUE AT A GLANCE =================
         (function () {
           var p = pages[7], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), 8);
           var vcards = p.querySelectorAll(".value-card");
           var cols = 3, gx = MX, gy = 1.74, gw = (W - 2 * MX - 2 * 0.34) / 3, gh = 1.55, gapx = 0.34, gapy = 0.3;
           for (var i = 0; i < vcards.length && i < 6; i++) {
@@ -387,7 +451,7 @@
         // ================= SLIDE 10 — PARTNERSHIP ASK =================
         (function () {
           var p = pages[9], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), 10);
           var asks = p.querySelectorAll(".ask");
           var gx = MX, gy = 1.74, gw = 7.4, gapy = 0.2;
           var gh = (6.85 - gy - 3 * gapy) / 4;
@@ -420,7 +484,7 @@
         // ================= SLIDE 11 — PILOT YEAR FRAMING =================
         (function () {
           var p = pages[10], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+          header(s, kickerOf(p), titleOf(p), 11);
           // hero line
           s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 1.74, w: W - 2 * MX, h: 1.15, rectRadius: 0.06, fill: { color: "EAF0F8" } });
           s.addText(txt(p.querySelector(".pilot-hero .tag")) || (EN ? "Year 1 = Pilot" : "Tahun 1 = Percontohan"), { x: MX + 0.25, y: 1.9, w: 2.2, h: 0.4, fontFace: FT, bold: true, fontSize: 12, color: C.white, align: "center", valign: "middle", fill: { color: C.green } });
@@ -441,10 +505,12 @@
           footer(s, 11); tick();
         })();
 
-        // ================= SLIDE 12 — NEXT STEPS + CLOSING =================
-        (function () {
-          var p = pages[11], s = pptx.addSlide();
-          header(s, kickerOf(p), titleOf(p));
+        // ================= NEXT STEPS + CLOSING (built last) =================
+        function nextStepsSlide() {
+          var cf = document.querySelector(".doc .page .closing-foot");
+          var p = cf ? cf.closest(".page") : pages[pages.length - 1];
+          var s = pptx.addSlide();
+          header(s, kickerOf(p), titleOf(p), 17);
           var items = p.querySelectorAll(".tl-item");
           var n = Math.min(items.length, 5);
           var gx = MX, gy = 1.74, gw = (W - 2 * MX - (n - 1) * 0.25) / n, gapx = 0.25, gh = 3.1;
@@ -456,19 +522,21 @@
             s.addText(txt(items[i].querySelector("h4")), { x: x + 0.15, y: gy + 0.9, w: gw - 0.3, h: 0.7, align: "center", fontFace: FH, bold: true, fontSize: 11, color: C.blueDk, valign: "top" });
             s.addText(txt(items[i].querySelector("p")), { x: x + 0.15, y: gy + 1.6, w: gw - 0.3, h: gh - 1.7, align: "center", fontFace: FT, fontSize: 8.3, color: C.sub, valign: "top" });
           }
-          // one ask
+          // one ask — photo-backed band with dark scrim for an editorial finish
           var bigAsk = txt(p.querySelector(".oneask .big"));
-          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 5.2, w: W - 2 * MX, h: 1.55, rectRadius: 0.06, fill: { color: C.blueDk } });
+          var askPhoto = PHOTOS.painting || PHOTOS.classroom || PHOTOS.students;
+          if (askPhoto) addImg(s, askPhoto, { x: MX, y: 5.2, w: W - 2 * MX, h: 1.55, sizing: { type: "cover", w: W - 2 * MX, h: 1.55 } });
+          s.addShape(pptx.ShapeType.roundRect, { x: MX, y: 5.2, w: W - 2 * MX, h: 1.55, rectRadius: 0.06, fill: { color: C.blueDk, transparency: askPhoto ? 18 : 0 }, line: { color: C.blueDk, width: 1 } });
           gradBar(s, MX, 5.2, W - 2 * MX, 0.07);
           s.addText(EN ? "ONE SIMPLE ASK RIGHT NOW" : "SATU PERMINTAAN SEDERHANA SAAT INI", { x: MX + 0.4, y: 5.42, w: W - 2 * MX - 0.8, h: 0.3, fontFace: FT, fontSize: 10, bold: true, color: C.yellow, charSpacing: 2, align: "center" });
           s.addText([
             { text: (EN ? "We ask for " : "Kami meminta "), options: { color: "DCE6F7", fontSize: 16 } },
             { text: bigAsk, options: { color: C.white, bold: true, italic: true, fontSize: 26, fontFace: FH } }
           ], { x: MX + 0.4, y: 5.7, w: W - 2 * MX - 0.8, h: 0.9, align: "center", valign: "middle" });
-          footer(s, 12); tick();
-        })();
+          footer(s, 17); tick();
+        }
 
-        // ================= RUNDOWN SLIDES (13–15) =================
+        // ================= RUNDOWN SLIDES =================
         function rdDayData(dayEl) {
           var head = dayEl.querySelector(".rd-day-head");
           var dnum = head ? txt(head.querySelector(".rd-d")) : "";
@@ -488,7 +556,7 @@
         }
         function rundownSlide(dayEls, sub, num) {
           var s = pptx.addSlide();
-          header(s, EN ? "Program Schedule" : "Jadwal Program", EN ? "Program Rundown" : "Rundown Program");
+          header(s, EN ? "Program Schedule" : "Jadwal Program", EN ? "Program Rundown" : "Rundown Program", num);
           s.addText(sub, { x: MX, y: 1.5, w: W - 2 * MX, h: 0.3, fontFace: FT, fontSize: 11, italic: true, color: C.sub });
           var n = dayEls.length, gap = 0.32, gx = MX, gy = 1.98, gw = (W - 2 * MX - (n - 1) * gap) / n, colH = 6.9 - gy;
           for (var i = 0; i < n; i++) {
@@ -510,19 +578,17 @@
         }
         var rdDays = document.querySelectorAll(".doc .rd-day");
         if (rdDays.length >= 7) {
-          (function () { rundownSlide([rdDays[0], rdDays[1], rdDays[2]], EN ? "Day 0–2 · Arrival, Opening & PETRA Lectures" : "Hari 0–2 · Kedatangan, Pembukaan & Kuliah PETRA", 13); tick(); })();
-          (function () { rundownSlide([rdDays[3], rdDays[4]], EN ? "Day 3–4 · Danamon Visit & Cultural Immersion" : "Hari 3–4 · Kunjungan Danamon & Imersi Budaya", 14); tick(); })();
-          (function () { rundownSlide([rdDays[5], rdDays[6]], EN ? "Day 5–6 · Capstone, Closing & Departure" : "Hari 5–6 · Capstone, Closing & Keberangkatan", 15); tick(); })();
+          (function () { rundownSlide([rdDays[0], rdDays[1], rdDays[2]], EN ? "Day 0–2 · Arrival, Opening & PETRA Lectures" : "Hari 0–2 · Kedatangan, Pembukaan & Kuliah PETRA", 12); tick(); })();
+          (function () { rundownSlide([rdDays[3], rdDays[4]], EN ? "Day 3–4 · Danamon Visit & Cultural Immersion" : "Hari 3–4 · Kunjungan Danamon & Imersi Budaya", 13); tick(); })();
+          (function () { rundownSlide([rdDays[5], rdDays[6]], EN ? "Day 5–6 · Capstone, Closing & Departure" : "Hari 5–6 · Capstone, Closing & Keberangkatan", 14); tick(); })();
         }
 
         // ================= BUDGET SLIDE 16 — RAB AT A GLANCE =================
         (function () {
-          var p = document.querySelector(".doc .page table.rab");
-          if (!p) return;
-          p = p.closest(".page");
+          var subs = document.querySelectorAll(".doc table.rab tr.sub");
+          if (!subs.length) return;
           var s = pptx.addSlide();
-          header(s, EN ? "Budget · RAB" : "Anggaran · RAB", EN ? "Budget at a Glance" : "Anggaran Sekilas");
-          var subs = p.querySelectorAll("table.rab tr.sub");
+          header(s, EN ? "Budget · RAB" : "Anggaran · RAB", EN ? "Budget at a Glance" : "Anggaran Sekilas", 15);
           var cols = 4, gx = MX, gy = 1.78, gw = (W - 2 * MX - 3 * 0.28) / 4, gh = 1.5, gapx = 0.28, gapy = 0.26;
           for (var i = 0; i < subs.length; i++) {
             var col = i % cols, row = Math.floor(i / cols);
@@ -537,7 +603,7 @@
           var by = gy + 2 * (gh + gapy);
           s.addShape(pptx.ShapeType.roundRect, { x: MX, y: by, w: W - 2 * MX, h: 1.2, rectRadius: 0.06, fill: { color: C.blueDk } });
           gradBar(s, MX, by, W - 2 * MX, 0.07);
-          function fig(tr) { var c = p.querySelectorAll(tr + " .num"); return c.length ? txt(c[0]) : ""; }
+          function fig(tr) { var c = document.querySelectorAll(".doc " + tr + " .num"); return c.length ? txt(c[0]) : ""; }
           var seg = (W - 2 * MX) / 3;
           function totCol(x, lbl, val, hot) {
             s.addText(lbl.toUpperCase(), { x: x + 0.3, y: by + 0.22, w: seg - 0.6, h: 0.3, fontFace: FT, fontSize: 9.5, bold: true, color: hot ? C.yellow : "AFC2E0", charSpacing: 1, align: "center" });
@@ -546,7 +612,7 @@
           totCol(MX, EN ? "Program Subtotal" : "Subtotal Program", fig("tr.prog"), false);
           totCol(MX + seg, EN ? "Contingency 10%" : "Contingency 10%", fig("tr.cont"), false);
           totCol(MX + 2 * seg, EN ? "Grand Total" : "Grand Total", fig("tr.grand"), true);
-          footer(s, 16); tick();
+          footer(s, 15); tick();
         })();
 
         // ================= BUDGET SLIDE 17 — ASSUMPTIONS & COST =================
@@ -556,7 +622,7 @@
           var gp = glance.length ? glance[glance.length - 1] : null; // assumptions table (last glance)
           if (!cards.length || !gp) return;
           var s = pptx.addSlide();
-          header(s, EN ? "Budget · Assumptions" : "Anggaran · Asumsi", EN ? "Assumptions & Cost per Participant" : "Asumsi & Biaya per Peserta");
+          header(s, EN ? "Budget · Assumptions" : "Anggaran · Asumsi", EN ? "Assumptions & Cost per Participant" : "Asumsi & Biaya per Peserta", 16);
           // assumptions table (left)
           var rows = [], trs = gp.querySelectorAll("tr");
           for (var i = 0; i < trs.length; i++) {
@@ -586,8 +652,11 @@
             s.addText(txt(c.querySelector(".bc-val")), { x: rx + 0.25, y: y + 0.5, w: rw - 0.5, h: 0.5, fontFace: FH, bold: true, fontSize: 24, color: feat ? C.white : C.blueDk });
             s.addText(txt(c.querySelector(".bc-sub")), { x: rx + 0.25, y: y + 1.06, w: rw - 0.5, h: 0.4, fontFace: FT, fontSize: 9.5, color: feat ? "CFE0F5" : C.sub });
           }
-          footer(s, 17); tick();
+          footer(s, 16); tick();
         })();
+
+        // ================= FINAL SLIDE — NEXT STEPS + CLOSING =================
+        nextStepsSlide();
 
         return pptx.writeFile({ fileName: "PETRA-x-DANAMON-Presentation.pptx" });
       })
