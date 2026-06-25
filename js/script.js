@@ -550,29 +550,59 @@
             var note = noteEl ? txt(noteEl) : "";
             var main = txt(actEl);
             if (note) main = main.replace(note, "").trim();
-            items.push({ time: time, act: main });
+            var loc = txt(rows[i].querySelector(".rd-loc"));
+            if (loc === "—") loc = "";
+            items.push({ time: time, act: main, loc: loc });
           }
           return { dnum: dnum, theme: theme, items: items };
         }
         function rundownSlide(dayEls, sub, num) {
           var s = pptx.addSlide();
+          var th = themeFor(num);
           header(s, EN ? "Program Schedule" : "Jadwal Program", EN ? "Program Rundown" : "Rundown Program", num);
-          s.addText(sub, { x: MX, y: 1.5, w: W - 2 * MX, h: 0.3, fontFace: FT, fontSize: 11, italic: true, color: C.sub });
-          var n = dayEls.length, gap = 0.32, gx = MX, gy = 1.98, gw = (W - 2 * MX - (n - 1) * gap) / n, colH = 6.9 - gy;
+          // sub-title chip — orients the reader to which days this slide covers
+          s.addShape(pptx.ShapeType.rect, { x: MX, y: 1.55, w: 0.1, h: 0.22, fill: { color: th.accent } });
+          s.addText(sub, { x: MX + 0.2, y: 1.5, w: W - 2 * MX - 0.2, h: 0.3, fontFace: FT, fontSize: 11.5, bold: true, color: C.slate, valign: "middle" });
+
+          var data = [], maxCount = 1;
+          for (var q = 0; q < dayEls.length; q++) {
+            var dd = rdDayData(dayEls[q]);
+            data.push(dd);
+            if (dd.items.length > maxCount) maxCount = dd.items.length;
+          }
+          var n = dayEls.length, gap = 0.34, gx = MX, gy = 2.02, gw = (W - 2 * MX - (n - 1) * gap) / n;
+          var colH = 6.92 - gy;                 // full column height
+          var headH = 0.78;                     // day header chip
+          var bodyTop = gy + headH + 0.14;      // first row baseline inside body
+          var bodyH = (gy + colH) - bodyTop - 0.14;
+          var slotH = bodyH / maxCount;         // shared slot height -> rows align across days
+          var pad = 0.2, pillW = 1.06, pgap = 0.14;
+
           for (var i = 0; i < n; i++) {
-            var d = rdDayData(dayEls[i]);
+            var d = data[i];
             var x = gx + i * (gw + gap);
-            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy, w: gw, h: 0.74, rectRadius: 0.05, fill: { color: C.blueDk } });
-            s.addShape(pptx.ShapeType.rect, { x: x, y: gy, w: gw, h: 0.06, fill: { color: C.orange } });
-            s.addText(d.dnum, { x: x + 0.16, y: gy + 0.08, w: gw - 0.32, h: 0.32, fontFace: FH, bold: true, fontSize: 14, color: C.white });
-            s.addText(d.theme, { x: x + 0.16, y: gy + 0.42, w: gw - 0.32, h: 0.3, fontFace: FT, fontSize: 8.3, color: "DCE6F7" });
-            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy + 0.82, w: gw, h: colH - 0.82, rectRadius: 0.05, fill: { color: C.white }, line: { color: C.rule, width: 1 } });
-            var bl = [];
+            // day header chip
+            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy, w: gw, h: headH, rectRadius: 0.06, fill: { color: C.blueDk }, shadow: { type: "outer", color: "9AA0A8", blur: 4, offset: 2, angle: 90, opacity: 0.3 } });
+            s.addShape(pptx.ShapeType.rect, { x: x, y: gy, w: gw, h: 0.07, fill: { color: th.accent } });
+            s.addText(d.dnum, { x: x + 0.18, y: gy + 0.1, w: gw - 0.36, h: 0.34, fontFace: FH, bold: true, fontSize: 15, color: C.white });
+            s.addText(d.theme, { x: x + 0.18, y: gy + 0.45, w: gw - 0.36, h: 0.3, fontFace: FT, fontSize: 8.2, color: "C7D4EC", valign: "top" });
+            // body card
+            s.addShape(pptx.ShapeType.roundRect, { x: x, y: gy + headH + 0.06, w: gw, h: colH - headH - 0.06, rectRadius: 0.06, fill: { color: C.white }, line: { color: C.rule, width: 1 }, shadow: { type: "outer", color: "9AA0A8", blur: 4, offset: 2, angle: 90, opacity: 0.28 } });
+
+            var bx = x + pad, bw = gw - 2 * pad;
+            var tx = bx + pillW + pgap, tw = bw - pillW - pgap;
             for (var j = 0; j < d.items.length; j++) {
-              bl.push({ text: d.items[j].time, options: { bold: true, color: C.green, fontSize: 9, breakLine: true, paraSpaceBefore: j ? 6 : 0 } });
-              bl.push({ text: d.items[j].act, options: { color: C.ink, fontSize: 9.5, breakLine: true } });
+              var it = d.items[j], sy = bodyTop + j * slotH;
+              // time pill
+              s.addShape(pptx.ShapeType.roundRect, { x: bx, y: sy, w: pillW, h: 0.28, rectRadius: 0.05, fill: { color: th.accent } });
+              s.addText(it.time, { x: bx, y: sy, w: pillW, h: 0.28, align: "center", valign: "middle", fontFace: FT, fontSize: 7.8, bold: true, color: C.white });
+              // activity + location
+              var runs = [{ text: it.act, options: { fontSize: 9.2, color: C.ink, bold: true, breakLine: true } }];
+              if (it.loc) runs.push({ text: it.loc, options: { fontSize: 7.8, color: C.sub, italic: true, breakLine: true } });
+              s.addText(runs, { x: tx, y: sy - 0.03, w: tw, h: slotH - 0.06, valign: "top", fontFace: FT, lineSpacingMultiple: 0.98, paraSpaceAfter: 1 });
+              // divider between sessions
+              if (j < d.items.length - 1) s.addShape(pptx.ShapeType.line, { x: bx, y: sy + slotH - 0.07, w: bw, h: 0, line: { color: "ECECE6", width: 1 } });
             }
-            s.addText(bl, { x: x + 0.18, y: gy + 0.97, w: gw - 0.36, h: colH - 1.1, valign: "top", fontFace: FT, lineSpacingMultiple: 1.0 });
           }
           footer(s, num);
         }
